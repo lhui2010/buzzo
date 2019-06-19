@@ -1,0 +1,203 @@
+#!/usr/bin/env perl
+use strict;
+use warnings;
+use Cwd;
+
+use var;
+
+my %GENOME_HASH =  %var::GENOME_HASH;
+my %GTF_HASH = %var::GTF_HASH;
+#DB table 
+
+
+#Running Config
+my $threads=8;
+
+
+
+my $dir = getcwd;
+my @list = `ls -d */`;
+
+#my @cmd;
+
+for my $user (@list)
+{
+    $user=~s/\/\n//;
+    print $user;<STDIN>;
+    chdir ($dir);
+    my (%left, %right);
+
+
+    my @sp_name=`ls -d $user/input*/`;
+
+	for my $sp_name(@sp_name)
+	{
+    $sp_name=~s/.*input_//;
+    $sp_name=~s/\/\n//;
+    #print $sp_name;exit;
+    my $GM=$GENOME_HASH{$sp_name};
+    my $GTF=$GTF_HASH{$sp_name};
+
+    my $PE_PATH="$dir/$user/input_$sp_name";
+    #print $PE_PATH;exit;
+    chdir ($PE_PATH) or die "cannot change: $!\n";
+
+
+##confirm OK
+    my $alignment_rate =`grep "overall alignment rate" *tuxedo.[e][0-9]* |sed "s/.tuxedo.*:/\t/"`;
+
+#    print $alignment_rate;
+#	print $PHENO_DATA;
+#    print "\n\n\nReady to submit? Press Y to continue: ";
+#    chomp (my $input=<STDIN>);
+#    exit unless (lc($input) eq "y");
+
+    open OUT, ">gene_alignment_ratio.xls" or die;
+    print OUT $alignment_rate;
+    close OUT;
+
+    
+
+
+
+
+############################################
+#
+#start of substream analysis
+    my (%gtf, %Treatment);
+#name.txt is core control file
+    open IN, "../name.txt" or die;
+    while(<IN>)
+    {
+        my ($sampleID, $newID) = split;
+
+        my $file = `ls $PE_PATH/$newID*with_novel.gtf`;
+		chomp ($file);
+
+		next if ($file eq "");
+
+		$file.="\n";
+
+        $gtf{$newID} = $file;
+
+        my $tmp=$newID;
+        $tmp=~s/[-_.]rep.{1,4}$//;
+        $Treatment{$newID}=$tmp;
+    }
+    close IN;
+    
+#for Prep_DE.py
+    open OUT, ">gtf_list" or die;
+    for my $sample(sort keys %gtf)
+    {
+        print OUT "$sample\t$gtf{$sample}";
+    }
+    close OUT;
+
+    #print "PrepDE.py -i gtf_list 2>&1 >/dev/null";
+#output: gene_count_matrix.csv
+#transcript_count_matrix.csv
+
+#Create PhenoData for DESEQ
+	my $PHENO;
+    #print OUT "Sample\tTreatment\ttype\n";
+	$PHENO.="Sample\tTreatment\ttype\n";
+#TODO: remove paired-end
+    for my $k (sort keys %Treatment)
+    {
+        $PHENO.= $k."\t".$Treatment{$k}."\tpaired-end\n";
+    }
+    open OUT, ">PHENO_DATA" or die;
+	print OUT $PHENO;
+    close OUT;
+
+    open OUT, ">deseq.R" or die;
+    print OUT '
+library(DESeq2)
+
+countData <- as.matrix(read.csv("gene_count_matrix.csv", row.names="gene_id", check.names=FALSE))
+colData <- read.csv("PHENO_DATA", sep="\t", row.names=1)
+countData <- countData[, rownames(colData)]
+dds <- DESeqDataSetFromMatrix(countData = countData, 
+                              colData = colData, design = ~ Treatment)
+# Run the default analysis for DESeq2 and generate results table
+dds <- DESeq(dds)
+
+pdf("pca.pdf")
+rld <- rlog(dds, blind=FALSE)
+plotPCA(rld, intgroup=c("Treatment"))
+dev.off()
+
+library(ggplot2)
+pdf("pca_with_name.pdf", 20,20)
+z <- plotPCA(rld, intgroup=c("Treatment"))
+nudge <- position_nudge(y = 1)
+z + geom_text(aes(label = name), position = nudge)
+dev.off()
+
+
+uniq_group<-as.character(unique(colData$Treatment))
+cmp_group<-combn(uniq_group, 2)
+
+#print first sample with header
+id<-1
+Sample1=cmp_group[1,id]
+Sample2=cmp_group[2,id]
+res <- results(dds, contrast=c("Treatment",Sample1, Sample2))
+resOrdered <- res[order(res$padj), ]
+resOrdered[7]<-Sample1
+resOrdered[8]<-Sample2
+colnames(resOrdered)[7]<-"Sample1"
+colnames(resOrdered)[8]<-"Sample2"
+
+write.table(resOrdered, file="gene_DE.xls", quote = FALSE, sep="\t", row.names=T,col.names=c("GeneID\tbaseMean","log2FoldChange(Sample1/Sample2)","lfcSE","stat","pvalue","padj","Sample1","Sample2"))
+
+#print rest samples without header
+for (id in seq(2, ncol(cmp_group))){
+  Sample1=cmp_group[1,id]
+  Sample2=cmp_group[2,id]
+  res <- results(dds, contrast=c("Treatment",Sample1, Sample2))
+  resOrdered <- res[order(res$padj), ]
+  resOrdered[7]<-Sample1
+  resOrdered[8]<-Sample2
+  colnames(resOrdered)[7]<-"Sample1"
+  colnames(resOrdered)[8]<-"Sample2"
+  
+  write.table(resOrdered, file="gene_DE.xls", quote = FALSE, col.names=FALSE, append=TRUE, sep="\t")
+}
+';
+    close OUT;
+
+
+#script for combining all expression tables
+    open OUT, ">merge.sh" or die;
+    print OUT '#!/bin/bash
+for i in *tuxedo.exp_table
+    do
+        sort -k1,1 $i |cut -f1-6  >gene.exp_table.header
+        break
+    done
+
+for i in *tuxedo.exp_table
+    do
+        #cut -f7-9 $i |sed "s/\(Coverage\|FPKM\|TPM\)/\1.$i/g">$i.cut
+        sort -k1,1 $i |cut -f8  |sed "s/\(Coverage\|FPKM\|TPM\)/\1.$i/g" |sed "s/.tuxedo.exp_table//g" >$i.cut
+    done
+
+paste  gene.exp_table.header *exp_table.cut >gene_expression.xls
+';
+    close OUT;
+
+    print $alignment_rate;
+	print $PHENO;
+    print "\n\n\nReady to submit? Press Y to continue: ";
+    chomp (my $input=<STDIN>);
+    next unless (lc($input) eq "y");
+    system ("mkdir ../result");
+
+    my $cmd="qsub  -V -b y -N output -cwd \"PrepDE.py -i gtf_list 2>&1 >/dev/null &&R CMD BATCH deseq.R && bash ./merge.sh && cp ./gene_DE.xls ../result/$sp_name.gene_DE.xls && cp ./gene_expression.xls ../result/$sp_name.gene_expression.xls && cp ./gene_alignment_ratio.xls ../result/$sp_name.gene_alignment_ratio.xls && cp ./pca.pdf ../result/$sp_name.pca.pdf && cp ./pca_with_name.pdf ../result/$sp_name.pca.label.pdf\"";
+
+    system ($cmd);
+	}
+}
+
