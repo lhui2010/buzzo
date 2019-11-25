@@ -74,7 +74,10 @@ for my $user (@list)
 			delete $right{$newID};
 			next;
 		}
-        my $print ="cd $PE_PATH && qsub  -cwd -j n -b y -V -N $newID -pe smp $threads  \"hisat2 --mp 3,1 -p $threads -x $GM -1 $PE_PATH/$left{$newID} -2 $PE_PATH/$right{$newID} -S $newID.sam   && samtools sort -@ $threads -o $newID.bam $newID.sam && stringtie -e -b $newID-st-abun-out -p $threads -G $GTF -o $newID.with_novel.gtf -A $newID.exp_table $newID.bam \"";
+#When on SGE system
+        #my $print ="cd $PE_PATH && qsub  -cwd -j n -b y -V -N $newID -pe smp $threads  \"hisat2 --mp 3,1 -p $threads -x $GM -1 $PE_PATH/$left{$newID} -2 $PE_PATH/$right{$newID} -S $newID.sam   && samtools sort -@ $threads -o $newID.bam $newID.sam && stringtie -e -b $newID-st-abun-out -p $threads -G $GTF -o $newID.with_novel.gtf -A $newID.exp_table $newID.bam \"";
+#When on LSF system
+        my $print ="cd $PE_PATH && bsub  -J $newID -n $threads -o output.%J  \"hisat2 --mp 3,1 -p $threads -x $GM -1 $PE_PATH/$left{$newID} -2 $PE_PATH/$right{$newID} -S $newID.sam   && samtools sort -@ $threads -o $newID.bam $newID.sam && stringtie -e -b $newID-st-abun-out -p $threads -G $GTF -o $newID.with_novel.gtf -A $newID.exp_table $newID.bam \"";
         print $print, "\n";
         push @cmd, $print;
     }

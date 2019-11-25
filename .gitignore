@@ -1,0 +1,12 @@
+##Syntax https://git-scm.com/docs/gitignore
+gatk/input
+gatk/ref
+gatk/gvcf.txt
+rnaseq/liuhui
+rnaseq/RNA-Seq
+
+##ignore job details
+*/bsub.*
+*/core.*
+*/output.*
+*/error.*

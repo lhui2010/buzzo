@@ -14,6 +14,7 @@ our %GENOME_HASH=(
     "niatt" => "/lustre/local/database/GENOME/nicotiana_attenuata/niatt_genome.fa",
     "A188" => "/lustre/local/database/GENOME/A188/A188.genome.fa",
     "niben" => "/lustre/local/database/GENOME/Nicotiana_benthamiana/v044/Niben_genome.fa",
+    "vesca" => "/ds3200_1/users_root/yitingshuang/lh/database/Fragaria_vesca/F_vesca_H4_V4.1.fasta",
     );
 our %GTF_HASH=(
     "maize" => "/lustre/local/database/GENOME/zea_mays_agp_v4/Zea_mays.AGPv4.32.gff3",
@@ -25,6 +26,7 @@ our %GTF_HASH=(
     "niatt" => "/lustre/local/database/GENOME/nicotiana_attenuata/ref_NIATTr2_top_level.gff3",
     "A188" => "/lustre/local/database/GENOME/A188/v1.1_chr/A188_chr.total.gff",
     "niben" => "/lustre/local/database/GENOME/Nicotiana_benthamiana/v044/Niben.genome.v0.4.4.gene_models.annotated.gff",
+    "vesca" => "/ds3200_1/users_root/yitingshuang/lh/database/Fragaria_vesca/F_vesca_new_gene_ids_finalAnnot.gff",
     );
     #"A188" => "/lustre/local/database/GENOME/A188/A188.gff",
 
